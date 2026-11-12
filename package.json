@@ -1,0 +1,41 @@
+{
+  "name": "minecraft-modpack-panel",
+  "version": "0.2.0",
+  "description": "Self-hosted web panel to install and manage modded Minecraft servers from CurseForge modpacks (Forge, NeoForge, Fabric).",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "minecraft",
+    "minecraft-server",
+    "modpack",
+    "curseforge",
+    "forge",
+    "neoforge",
+    "fabric",
+    "server-panel",
+    "self-hosted"
+  ],
+  "author": "ChoupiViP",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChoupiViP/minecraft-modpack-panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ChoupiViP/minecraft-modpack-panel/issues"
+  },
+  "homepage": "https://github.com/ChoupiViP/minecraft-modpack-panel#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "express": "^4.21.2",
+    "extract-zip": "^2.0.1",
+    "ws": "^8.18.0"
+  }
+}
