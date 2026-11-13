@@ -17,6 +17,10 @@ A lightweight, self-hosted web panel to create and manage **modded Minecraft ser
 - **Performance**: live CPU, RAM and TPS with one-hour charts and lag warnings. TPS is read with `forge tps`, `neoforge tps` or `tick query` (1.20.3+), without cluttering the console.
 - **Mods**: list installed mods with their real name and version, enable/disable one in a click (handy when a mod crashes the server), add `.jar` files by drag and drop, and spot *client-only* mods.
 - **Scheduled tasks**: nightly restart with in-game warnings (5 min and 1 min before), scheduled start/stop/backup/command, per day of the week.
+- **File manager**: browse the server folder, edit configs (`.toml`, `.json`, `.cfg`…) in the browser, upload, download and delete files.
+- **Crash reports**: when a server crashes, the panel shows the cause, the suspected mods and the missing dependencies, with a link to the full report.
+- **Discord notifications** (webhook): server online/stopped, crash with suspected mods, players joining/leaving, failed backups.
+- **Start with Windows**: the panel can start itself at login (no window), and each server can start automatically with the panel.
 - **Multiple servers** side by side, each on its own port.
 - **Backups**: manual or scheduled. Saving is paused (`save-off` / `save-all`) during the copy. Old backups are rotated out, and backups can be downloaded or restored.
 - `server.properties` editor, RAM and JVM argument settings.
@@ -25,6 +29,8 @@ A lightweight, self-hosted web panel to create and manage **modded Minecraft ser
 | Mods | Scheduled tasks |
 |---|---|
 | ![Mods](docs/screenshots/mods.png) | ![Scheduled tasks](docs/screenshots/schedules.png) |
+| **Crash analysis** | **File manager** |
+| ![Crash analysis](docs/screenshots/crash.png) | ![File manager](docs/screenshots/files.png) |
 
 | Players | Console | Mobile |
 |---|---|---|
@@ -75,6 +81,29 @@ Then open `http://<your-pc-ip>:8080` on your phone. Any username works with the 
 
 > Exposing the panel to the internet is not recommended. Prefer a VPN (Tailscale, WireGuard…) or put it behind a reverse proxy with HTTPS.
 
+## Start on boot
+
+- **Windows**: in **Settings → Start with Windows**, click **Enable**. The panel then starts without a window when you log in, with the same address, port and password as now. Tick **Start automatically when the panel starts** in a server's settings to start that server too.
+- **Linux**: create a systemd service, for example `/etc/systemd/system/mc-panel.service`:
+
+```ini
+[Unit]
+Description=Minecraft Modpack Panel
+After=network-online.target
+
+[Service]
+User=minecraft
+WorkingDirectory=/opt/minecraft-modpack-panel
+Environment=HOST=0.0.0.0 PANEL_PASSWORD=change-me
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then run `sudo systemctl enable --now mc-panel`.
+
 ## Java versions
 
 | Minecraft | Java |
@@ -83,9 +112,13 @@ Then open `http://<your-pc-ip>:8080` on your phone. Any username works with the 
 | 1.17 – 1.20.4 | 17 |
 | ≥ 1.20.5 | 21 |
 
+Old Forge 1.16.5 builds (before 36.2.26) crash on recent Java versions; the panel upgrades them automatically to the recommended Forge 1.16.5 build when installing a modpack.
+
 The panel installs the required version into `data/java/` when it installs a modpack. You can also install versions from **Settings → Java versions**.
 
 ## Known limitations
+
+- Some CurseForge API keys are not allowed to use full search or to list every version of a modpack. The panel then shows the featured modpacks and accepts a **project ID** (shown in the “About Project” box of the modpack page); versions come from the modpack's latest files.
 
 - Some mod authors don't allow downloads through the CurseForge API. These mods are listed with a link so you can download them manually.
 - When a server is built from a client pack, a *client-only* mod may crash it. If that happens, remove the mod from the `mods` folder.
@@ -103,6 +136,10 @@ src/players.js          player management (ops, whitelist, bans)
 src/backups.js          zip backups + automatic backup interval
 src/mods.js             mod list (jar metadata), enable/disable, upload
 src/scheduler.js        scheduled tasks (restart, start, stop, backup, command)
+src/files.js            file manager (sandboxed to the server folder)
+src/crashes.js          crash report analysis
+src/notify.js           Discord notifications
+src/autostart.js        start with Windows
 src/java.js             Java detection and download (Adoptium)
 src/curseforge.js       CurseForge API client
 src/i18n.js             backend messages (FR / EN)

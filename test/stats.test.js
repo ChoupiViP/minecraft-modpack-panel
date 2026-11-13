@@ -40,6 +40,8 @@ test('commande TPS selon le loader et la version', () => {
 test('version de Java recommandée', () => {
   assert.equal(recommendedJava('1.12.2'), 8);
   assert.equal(recommendedJava('1.16.5'), 8);
+  assert.equal(recommendedJava('1.13.2'), 8);
+  assert.equal(recommendedJava('1.7.10'), 8);
   assert.equal(recommendedJava('1.17.1'), 17);
   assert.equal(recommendedJava('1.20.4'), 17);
   assert.equal(recommendedJava('1.20.5'), 21);

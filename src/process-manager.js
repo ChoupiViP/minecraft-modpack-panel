@@ -152,6 +152,7 @@ function handleLine(inst, line) {
   for (const q of inst.silentQueries) {
     if (q.re.test(line)) {
       q.lines.push(line);
+      if (q.endRe?.test(line)) q.finish();
       return;
     }
   }
@@ -169,9 +170,11 @@ function handleLine(inst, line) {
   if ((m = line.match(/: (\.?[A-Za-z0-9_]{2,16}) joined the game/))) {
     inst.players.add(m[1]);
     events.emit('status', inst.summary());
+    events.emit('player', { id: inst.id, name: m[1], joined: true });
   } else if ((m = line.match(/: (\.?[A-Za-z0-9_]{2,16}) left the game/))) {
     inst.players.delete(m[1]);
     events.emit('status', inst.summary());
+    events.emit('player', { id: inst.id, name: m[1], joined: false });
   }
 }
 
@@ -205,24 +208,33 @@ export function sendCommand(id, command) {
 }
 
 /**
- * Envoie une commande et capture pendant `ms` les lignes de réponse correspondant à `re`,
- * sans les afficher dans la console.
+ * Envoie une commande et capture les lignes de réponse correspondant à `re`, sans les afficher
+ * dans la console. La capture s'arrête à la ligne `endRe` (fin de réponse) ou après `timeoutMs`,
+ * ce qui laisse le temps de répondre à un serveur très chargé.
  */
-export function querySilently(id, command, re, ms = 2500) {
+export function querySilently(id, command, re, { endRe = null, timeoutMs = 10_000 } = {}) {
   const inst = getInstance(id);
   if (!inst.proc) return Promise.resolve([]);
   return new Promise((resolve) => {
-    const q = { re, lines: [] };
+    let timer;
+    const q = {
+      re,
+      endRe,
+      lines: [],
+      finish() {
+        clearTimeout(timer);
+        const i = inst.silentQueries.indexOf(q);
+        if (i >= 0) inst.silentQueries.splice(i, 1);
+        resolve(q.lines);
+      },
+    };
     inst.silentQueries.push(q);
+    timer = setTimeout(q.finish, timeoutMs);
     try {
       inst.proc.stdin.write(command + '\n');
     } catch {
-      /* processus en cours d'arrêt */
+      q.finish(); // processus en cours d'arrêt
     }
-    setTimeout(() => {
-      inst.silentQueries.splice(inst.silentQueries.indexOf(q), 1);
-      resolve(q.lines);
-    }, ms);
   });
 }
 

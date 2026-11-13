@@ -164,16 +164,44 @@ async function renderSettings() {
       <label class="field"><span>${t('settings.defaultRam')}</span>
         <input name="defaultRamMB" type="number" min="1024" step="512" value="${esc(settings.defaultRamMB)}">
       </label>
-      <button class="btn primary">${t('common.save')}</button>
+      <h2>${t('settings.discord')}</h2>
+      <p class="muted small">${t('settings.discordHelp')}</p>
+      <label class="field"><span>${t('settings.webhook')}</span>
+        <input name="discordWebhook" value="${esc(settings.discordWebhook)}" placeholder="https://discord.com/api/webhooks/…" autocomplete="off">
+      </label>
+      <div class="field"><span class="small muted">${t('settings.events')}</span>
+        ${Object.keys(settings.discordEvents)
+          .map((k) => `<label class="check" style="margin:4px 0"><input type="checkbox" data-ev="${k}" ${settings.discordEvents[k] ? 'checked' : ''}> ${t('ev.' + k)}</label>`)
+          .join('')}
+      </div>
+      <div class="row">
+        <button class="btn primary">${t('common.save')}</button>
+        <button type="button" class="btn" id="discord-test" ${settings.discordWebhook ? '' : 'disabled'}>${t('settings.test')}</button>
+      </div>
     </form>
+    <h2>${t('settings.autostart')}</h2>
+    <div class="card form">
+      <p class="muted small" style="margin-top:0">${settings.autostart.supported ? t('settings.autostartHelp') : t('settings.autostartUnsupported')}</p>
+      ${settings.autostart.supported
+        ? `<div class="row"><span>${settings.autostart.enabled ? t('settings.autostartOn') : t('settings.autostartOff')}</span><span class="spacer"></span>
+          <button class="btn ${settings.autostart.enabled ? '' : 'primary'}" id="autostart-toggle">${settings.autostart.enabled ? t('settings.autostartDisable') : t('settings.autostartEnable')}</button></div>`
+        : ''}
+    </div>
     <h2>${t('java.title')}</h2>
     <p class="muted small">${t('java.help')}</p>
     <div class="card form"><table>${[21, 17, 8].map(javaRow).join('')}</table></div>`;
   $('#settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
+    body.discordEvents = Object.fromEntries([...e.target.querySelectorAll('[data-ev]')].map((c) => [c.dataset.ev, c.checked]));
     const ok = await act(() => api('/settings', { method: 'PUT', body }), t('settings.saved'));
     if (ok && body.language !== getLang()) changeLang(body.language);
+    else if (ok) renderSettings();
+  });
+  $('#discord-test').addEventListener('click', () => act(() => api('/notify/test', { method: 'POST' }), t('settings.testSent')));
+  $('#autostart-toggle')?.addEventListener('click', async () => {
+    const ok = await act(() => api('/autostart', { method: 'POST', body: { enabled: !settings.autostart.enabled } }));
+    if (ok) renderSettings();
   });
   bindJavaButtons(main);
 }
@@ -292,8 +320,8 @@ async function renderNew() {
   const search = async (q = '', version = '') => {
     results.innerHTML = `<p class="muted">${t('new.searching')}</p>`;
     try {
-      const packs = await api(`/curseforge/search?q=${encodeURIComponent(q)}&version=${encodeURIComponent(version)}`);
-      results.innerHTML = packs.length
+      const { results: packs, restricted } = await api(`/curseforge/search?q=${encodeURIComponent(q)}&version=${encodeURIComponent(version)}`);
+      results.innerHTML = (restricted ? `<div class="warn-box" style="grid-column:1/-1">${t('new.restricted')}</div>` : '') + (packs.length
         ? packs
             .map(
               (p) => `<div class="pack" data-id="${p.id}" data-name="${esc(p.name)}">
@@ -303,7 +331,7 @@ async function renderNew() {
                 <div class="sum">${esc(p.summary)}</div></div></div>`,
             )
             .join('')
-        : `<p class="muted">${t('new.noResults')}</p>`;
+        : `<p class="muted">${t('new.noResults')}</p>`);
       results.querySelectorAll('.pack').forEach((el) =>
         el.addEventListener('click', () => {
           results.querySelectorAll('.pack').forEach((x) => x.classList.toggle('active', x === el));
@@ -385,7 +413,7 @@ async function renderPackSetup(modId, packName) {
 function renderServer() {
   const s = state.servers.get(state.view.id);
   const tab = state.view.tab || 'console';
-  const tabs = ['console', 'players', 'perf', 'mods', 'schedules', 'settings', 'backups'];
+  const tabs = ['console', 'players', 'perf', 'mods', 'files', 'schedules', 'settings', 'backups'];
   main.innerHTML = `
     <div class="server-head">
       <div style="flex:1;min-width:260px">
@@ -411,6 +439,7 @@ function renderServer() {
     players: tabPlayers,
     perf: tabPerf,
     mods: tabMods,
+    files: tabFiles,
     schedules: tabSchedules,
     settings: tabSettings,
     backups: tabBackups,
@@ -459,9 +488,31 @@ function renderAlerts(s) {
   if (s.runtime.status === 'install-failed') {
     html += `<div class="err-box">${t('alerts.installFailed')} <button class="btn sm" id="reinstall">${t('alerts.retry')}</button></div>`;
   }
-  box.innerHTML = html + '<div id="java-alert"></div>';
+  box.innerHTML = html + '<div id="crash-alert"></div><div id="java-alert"></div>';
   $('#reinstall')?.addEventListener('click', () => act(() => api(`/servers/${s.id}/reinstall`, { method: 'POST', body: {} })));
   if (s.installed) checkJavaAlert(s);
+  if (s.runtime.status === 'crashed') showCrashAlert(s);
+}
+
+/** Résumé du dernier crash report (description, mods suspects) avec lien vers le rapport complet. */
+async function showCrashAlert(s) {
+  const crash = await api(`/servers/${s.id}/crashes/latest`).catch(() => null);
+  const box = $('#crash-alert');
+  if (!box || state.view.id !== s.id) return;
+  const lines = [];
+  if (crash?.description) lines.push(`<b>${esc(crash.description)}</b>`);
+  if (crash?.exception) lines.push(`<code class="small">${esc(crash.exception)}</code>`);
+  if (crash?.suspects?.length) lines.push(t('crash.suspects', { mods: `<b>${esc(crash.suspects.join(', '))}</b>` }));
+  if (crash?.missingDeps?.length) lines.push(t('crash.missing', { deps: `<b>${esc(crash.missingDeps.join(', '))}</b>` }));
+  box.innerHTML = `<div class="err-box"><div style="font-weight:600;margin-bottom:6px">${t('crash.title')}</div>
+    ${crash ? lines.map((l) => `<div>${l}</div>`).join('') : `<div class="small">${t('crash.noReport')}</div>`}
+    ${crash ? `<button class="btn sm" id="open-crash" style="margin-top:8px">${t('crash.open')}</button>` : ''}</div>`;
+  $('#open-crash')?.addEventListener('click', () => {
+    filesView.openFile = crash.path;
+    filesView.path = 'crash-reports';
+    filesView.id = s.id;
+    navigate({ name: 'server', id: s.id, tab: 'files' });
+  });
 }
 
 // --- Onglet console ---
@@ -868,6 +919,183 @@ async function uploadMods(id, files) {
   loadMods(id);
 }
 
+// --- Onglet fichiers ---
+const filesView = { id: null, path: '', openFile: null, editor: null };
+
+async function tabFiles(s) {
+  if (filesView.id !== s.id) Object.assign(filesView, { id: s.id, path: '', openFile: null, editor: null });
+  if (filesView.openFile) {
+    const file = filesView.openFile;
+    filesView.openFile = null;
+    return openEditor(file);
+  }
+  if (filesView.editor) return renderEditor();
+  return loadDir(filesView.path);
+}
+
+const fileUrl = (sub, p) => `/servers/${filesView.id}/files${sub}?path=${encodeURIComponent(p)}`;
+
+function breadcrumb(p, { linkLast = false } = {}) {
+  const parts = p ? p.split('/') : [];
+  const crumbs = [`<a href="#" data-dir="">${t('files.root')}</a>`];
+  parts.forEach((part, i) => {
+    const sub = parts.slice(0, i + 1).join('/');
+    crumbs.push(i === parts.length - 1 && !linkLast ? `<b>${esc(part)}</b>` : `<a href="#" data-dir="${esc(sub)}">${esc(part)}</a>`);
+  });
+  return `<div class="crumbs">${crumbs.join('<span class="muted">/</span>')}</div>`;
+}
+
+function bindCrumbs(root) {
+  root.querySelectorAll('[data-dir]').forEach((a) =>
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (filesView.editor?.dirty && !confirm(t('files.unsaved'))) return;
+      filesView.editor = null;
+      loadDir(a.dataset.dir);
+    }),
+  );
+}
+
+async function loadDir(p) {
+  const box = $('#tab-content');
+  let data;
+  try {
+    data = await api(fileUrl('', p));
+  } catch (e) {
+    if (p) return loadDir(''); // dossier supprimé entre-temps : retour à la racine
+    box.innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+    return;
+  }
+  if (state.view.tab !== 'files' || state.view.id !== filesView.id) return;
+  filesView.path = data.path;
+  const join = (name) => (data.path ? `${data.path}/${name}` : name);
+  box.innerHTML = `
+    <div class="row" style="margin-bottom:12px">
+      ${breadcrumb(data.path)}
+      <span class="spacer"></span>
+      <button class="btn sm" id="mkdir">${t('files.newFolder')}</button>
+      <label class="btn sm primary">${t('files.upload')}<input type="file" id="file-upload" multiple hidden></label>
+    </div>
+    <div class="card file-table">${
+      data.items.length
+        ? `<table><thead><tr><th>${t('files.name')}</th><th class="hide-sm">${t('files.size')}</th><th class="hide-sm">${t('files.modified')}</th><th></th></tr></thead><tbody>
+          ${data.items
+            .map(
+              (it) => `<tr>
+              <td><a href="#" class="file-link" data-name="${esc(it.name)}" data-isdir="${it.dir ? 1 : 0}">${it.dir ? '📁' : '📄'} ${esc(it.name)}</a></td>
+              <td class="hide-sm muted small">${it.dir ? '' : fmtSize(it.size)}</td>
+              <td class="hide-sm muted small">${it.mtime ? fmtDate(it.mtime) : ''}</td>
+              <td class="row" style="justify-content:flex-end;flex-wrap:nowrap">
+                ${it.dir ? '' : `<a class="btn sm" href="/api${fileUrl('/download', join(it.name))}" download>${t('bk.download')}</a>`}
+                <button class="btn sm danger" data-del="${esc(it.name)}">${t('common.delete')}</button></td></tr>`,
+            )
+            .join('')}</tbody></table>`
+        : `<p class="muted" style="margin:0">${t('files.empty')}</p>`
+    }</div>`;
+  bindCrumbs(box);
+  box.querySelectorAll('.file-link').forEach((a) =>
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = join(a.dataset.name);
+      if (a.dataset.isdir === '1') loadDir(target);
+      else openEditor(target);
+    }),
+  );
+  box.querySelectorAll('[data-del]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (!confirm(t('files.deleteConfirm', { name: b.dataset.del }))) return;
+      const ok = await act(() => api(fileUrl('', join(b.dataset.del)), { method: 'DELETE' }), t('files.deleted'));
+      if (ok) loadDir(data.path);
+    }),
+  );
+  $('#mkdir').addEventListener('click', async () => {
+    const name = prompt(t('files.folderPrompt'), '');
+    if (!name) return;
+    const ok = await act(() => api(`/servers/${filesView.id}/files/mkdir`, { method: 'POST', body: { path: join(name.trim()) } }));
+    if (ok) loadDir(data.path);
+  });
+  $('#file-upload').addEventListener('change', async (e) => {
+    let n = 0;
+    for (const file of e.target.files) {
+      try {
+        const res = await fetch(`/api/servers/${filesView.id}/files/upload?path=${encodeURIComponent(data.path)}&name=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: file,
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+        n++;
+      } catch (err) {
+        toast(`${file.name} : ${err.message}`, true);
+      }
+    }
+    if (n) toast(t('files.uploaded', { n }));
+    loadDir(data.path);
+  });
+}
+
+async function openEditor(p) {
+  try {
+    const file = await api(fileUrl('/content', p));
+    filesView.editor = { path: file.path, content: file.content, original: file.content, dirty: false };
+    renderEditor();
+  } catch (e) {
+    toast(e.message, true);
+    if (!$('.file-table')) loadDir(p.split('/').slice(0, -1).join('/'));
+  }
+}
+
+function renderEditor() {
+  const ed = filesView.editor;
+  const box = $('#tab-content');
+  const parent = ed.path.split('/').slice(0, -1).join('/');
+  box.innerHTML = `
+    <div class="row" style="margin-bottom:10px">
+      ${breadcrumb(ed.path)}
+      <span class="spacer"></span>
+      <span class="small muted" id="ed-state"></span>
+      <a class="btn sm" href="/api${fileUrl('/download', ed.path)}" download>${t('bk.download')}</a>
+      <button class="btn sm" id="ed-close">${t('files.close')}</button>
+      <button class="btn sm primary" id="ed-save" disabled>${t('common.save')}</button>
+    </div>
+    <textarea id="editor" class="editor" spellcheck="false">${esc(ed.content)}</textarea>
+    <p class="small muted">${t('files.hint')}</p>`;
+  bindCrumbs(box);
+  const area = $('#editor');
+  const sync = () => {
+    ed.content = area.value;
+    ed.dirty = ed.content !== ed.original;
+    $('#ed-save').disabled = !ed.dirty;
+    $('#ed-state').textContent = ed.dirty ? t('sched.unsaved') : '';
+  };
+  const save = async () => {
+    if (!ed.dirty) return;
+    const ok = await act(() => api(fileUrl('/content', ed.path), { method: 'PUT', body: ed.content, text: true }), t('files.saved'));
+    if (ok) {
+      ed.original = ed.content;
+      sync();
+    }
+  };
+  area.addEventListener('input', sync);
+  area.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      save();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      area.setRangeText('  ', area.selectionStart, area.selectionEnd, 'end');
+      sync();
+    }
+  });
+  $('#ed-save').addEventListener('click', save);
+  $('#ed-close').addEventListener('click', () => {
+    if (ed.dirty && !confirm(t('files.unsaved'))) return;
+    filesView.editor = null;
+    loadDir(parent);
+  });
+  sync();
+}
+
 // --- Onglet tâches planifiées ---
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // lundi → dimanche
 const dayName = (d) => new Intl.DateTimeFormat(locale(), { weekday: 'short' }).format(new Date(2024, 0, 7 + d)); // 07/01/2024 = dimanche
@@ -985,6 +1213,7 @@ async function tabSettings(s) {
       <label class="field"><span>${t('srv.jvmArgs')}</span>
         <input name="jvmArgs" value="${esc(s.jvmArgs)}" placeholder="-XX:+UseG1GC -XX:MaxGCPauseMillis=200"></label>
       <label class="check"><input type="checkbox" name="autoRestart" ${s.autoRestart ? 'checked' : ''}> ${t('srv.autoRestart')}</label>
+      <label class="check"><input type="checkbox" name="autoStart" ${s.autoStart ? 'checked' : ''}> ${t('srv.autoStart')}</label>
       <h2>${t('srv.autoBackups')}</h2>
       <label class="check"><input type="checkbox" name="abEnabled" ${s.autoBackup?.enabled ? 'checked' : ''}> ${t('srv.abEnable')}</label>
       <div class="grid2">
@@ -1012,6 +1241,7 @@ async function tabSettings(s) {
             javaPath: f.javaPath.value,
             jvmArgs: f.jvmArgs.value,
             autoRestart: f.autoRestart.checked,
+            autoStart: f.autoStart.checked,
             autoBackup: { enabled: f.abEnabled.checked, intervalHours: f.abInterval.value, keep: f.abKeep.value },
           },
         }),

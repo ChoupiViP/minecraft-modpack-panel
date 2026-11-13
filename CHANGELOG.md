@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-13
+
+### Added
+- **Files tab**: browse the server folder, edit text files (configs, scripts…) with Ctrl+S, upload, download, create folders and delete. Paths are sandboxed to the server folder.
+- **Crash analysis**: when a server crashes, the panel shows the description, exception, suspected mods and missing dependencies (Forge, NeoForge, Fabric formats) and links to the full crash report.
+- **Discord notifications** through a webhook: server online/stopped, crash (with suspected mods), player join/leave, failed backup. Includes a test button.
+- **Start with Windows**: creates a hidden startup script with the current network settings. Servers can be set to start automatically with the panel.
+- Fallback when the CurseForge API key cannot use search or list files: featured modpacks, search by project ID, versions from the modpack's latest files.
+- Forge 1.16.5 builds older than 36.2.26, which crash on recent Java (8u321+, 11.0.14+), are upgraded automatically to the recommended Forge 1.16.5 build during installation.
+
+### Fixed
+- TPS responses are no longer shown in the console when a busy server answers slowly (the capture now waits for the end of the response).
+- Minecraft formatting codes (`§e`, `§r`…) are removed from console lines.
+
+### Tested
+- Real CurseForge installs: *Dragon Mine Z* (Forge 1.20.1, 133 mods, built from the client pack) and *Create: Above and Beyond* (Forge 1.16.5, official server pack, Java 8 downloaded automatically).
+
 ## [0.3.0] - 2026-11-13
 
 ### Added
@@ -20,5 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/) and the p
 ### Added
 - First public release: CurseForge modpack installation (server pack or client pack rebuild), Forge/NeoForge/Fabric loaders, automatic Java download, live console, player management, CPU/RAM/TPS monitoring, multiple servers, backups, bilingual (EN/FR) mobile-friendly interface.
 
+[0.4.0]: https://github.com/ChoupiViP/minecraft-modpack-panel/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ChoupiViP/minecraft-modpack-panel/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ChoupiViP/minecraft-modpack-panel/releases/tag/v0.2.0

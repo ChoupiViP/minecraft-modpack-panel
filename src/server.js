@@ -17,6 +17,10 @@ import { getPlayers, playerAction } from './players.js';
 import { startStats, stopStats, statsEvents, systemInfo, tpsCommand } from './stats.js';
 import { listMods, setModEnabled, deleteMod, addMod } from './mods.js';
 import { normalizeSchedules, nextRun, startScheduler } from './scheduler.js';
+import * as files from './files.js';
+import { listCrashes, latestCrash } from './crashes.js';
+import { autostartStatus, enableAutostart, disableAutostart } from './autostart.js';
+import { startNotifications, sendTest, WEBHOOK_RE, EVENT_TYPES, DEFAULT_EVENTS } from './notify.js';
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT) || 8080;
@@ -54,20 +58,45 @@ function publicServer(s) {
 }
 
 // ---------- Paramètres ----------
+const mask = (secret, keep) => (secret ? '••••••••' + secret.slice(-keep) : '');
+
 app.get('/api/settings', (req, res) => {
   const s = store.getSettings();
-  res.json({ ...s, curseforgeApiKey: s.curseforgeApiKey ? '••••••••' + s.curseforgeApiKey.slice(-4) : '' });
+  res.json({
+    ...s,
+    curseforgeApiKey: mask(s.curseforgeApiKey, 4),
+    discordWebhook: mask(s.discordWebhook, 6),
+    discordEvents: { ...DEFAULT_EVENTS, ...s.discordEvents },
+    autostart: autostartStatus(),
+  });
 });
 
 app.put('/api/settings', wrap(async (req, res) => {
   const patch = {};
-  const { curseforgeApiKey, defaultJavaPath, defaultRamMB, language } = req.body;
+  const { curseforgeApiKey, defaultJavaPath, defaultRamMB, language, discordWebhook, discordEvents } = req.body;
   if (typeof curseforgeApiKey === 'string' && !curseforgeApiKey.startsWith('••')) patch.curseforgeApiKey = curseforgeApiKey.trim();
   if (defaultJavaPath) patch.defaultJavaPath = String(defaultJavaPath);
   if (defaultRamMB) patch.defaultRamMB = Number(defaultRamMB);
   if (language === 'fr' || language === 'en') patch.language = language;
+  if (typeof discordWebhook === 'string' && !discordWebhook.startsWith('••')) {
+    const url = discordWebhook.trim();
+    if (url && !WEBHOOK_RE.test(url)) throw err('webhook_invalid', {}, 400);
+    patch.discordWebhook = url;
+  }
+  if (discordEvents && typeof discordEvents === 'object') {
+    patch.discordEvents = Object.fromEntries(EVENT_TYPES.map((k) => [k, Boolean(discordEvents[k])]));
+  }
   store.updateSettings(patch);
   res.json({ ok: true });
+}));
+
+app.post('/api/notify/test', wrap(async (req, res) => {
+  await sendTest();
+  res.json({ ok: true });
+}));
+
+app.post('/api/autostart', wrap(async (req, res) => {
+  res.json(req.body?.enabled ? await enableAutostart() : await disableAutostart());
 }));
 
 app.get('/api/java', wrap(async (req, res) => {
@@ -155,6 +184,7 @@ app.patch('/api/servers/:id', wrap(async (req, res) => {
   if (b.javaPath) patch.javaPath = String(b.javaPath);
   if (typeof b.jvmArgs === 'string') patch.jvmArgs = b.jvmArgs;
   if (typeof b.autoRestart === 'boolean') patch.autoRestart = b.autoRestart;
+  if (typeof b.autoStart === 'boolean') patch.autoStart = b.autoStart;
   if (b.autoBackup) {
     patch.autoBackup = {
       enabled: Boolean(b.autoBackup.enabled),
@@ -242,6 +272,42 @@ app.post('/api/servers/:id/mods', express.raw({ type: () => true, limit: '256mb'
   res.status(201).json({ fileName: await addMod(serverOr404(req), String(req.query.name || ''), req.body) });
 }));
 
+// ---------- Fichiers ----------
+app.get('/api/servers/:id/files', wrap(async (req, res) => {
+  res.json(await files.listDir(serverOr404(req), String(req.query.path || '')));
+}));
+app.get('/api/servers/:id/files/content', wrap(async (req, res) => {
+  res.json(await files.readText(serverOr404(req), String(req.query.path || '')));
+}));
+app.put('/api/servers/:id/files/content', express.text({ type: () => true, limit: '4mb' }), wrap(async (req, res) => {
+  await files.writeText(serverOr404(req), String(req.query.path || ''), typeof req.body === 'string' ? req.body : '');
+  res.json({ ok: true });
+}));
+app.post('/api/servers/:id/files/upload', express.raw({ type: () => true, limit: '512mb' }), wrap(async (req, res) => {
+  await files.uploadFile(serverOr404(req), String(req.query.path || ''), String(req.query.name || ''), req.body);
+  res.status(201).json({ ok: true });
+}));
+app.post('/api/servers/:id/files/mkdir', wrap(async (req, res) => {
+  await files.makeDir(serverOr404(req), String(req.body?.path || ''));
+  res.status(201).json({ ok: true });
+}));
+app.delete('/api/servers/:id/files', wrap(async (req, res) => {
+  await files.deletePath(serverOr404(req), String(req.query.path || ''));
+  res.json({ ok: true });
+}));
+app.get('/api/servers/:id/files/download', wrap(async (req, res) => {
+  res.download(await files.downloadPath(serverOr404(req), String(req.query.path || '')));
+}));
+
+// ---------- Crash reports ----------
+app.get('/api/servers/:id/crashes', wrap(async (req, res) => res.json(await listCrashes(serverOr404(req)))));
+app.get('/api/servers/:id/crashes/latest', wrap(async (req, res) => {
+  const s = serverOr404(req);
+  // Par défaut : seulement un crash survenu depuis le dernier démarrage
+  const since = req.query.all === '1' ? 0 : pm.getInstance(s.id).startedAt || 0;
+  res.json(await latestCrash(s, since));
+}));
+
 // ---------- Tâches planifiées ----------
 app.get('/api/servers/:id/schedules', wrap(async (req, res) => {
   const s = serverOr404(req);
@@ -314,6 +380,22 @@ for (const s of store.listServers()) {
 }
 
 backups.startScheduler();
+startNotifications();
+
+// Serveurs à démarrer automatiquement avec le panel (espacés de 5 s pour ne pas tout charger d'un coup)
+store
+  .listServers()
+  .filter((s) => s.autoStart && s.installed)
+  .forEach((s, i) =>
+    setTimeout(() => {
+      try {
+        pm.getInstance(s.id).log(t('autostart_server'));
+        pm.start(store.getServer(s.id));
+      } catch (e) {
+        pm.getInstance(s.id).log(`[Panel] ${e.message}`);
+      }
+    }, 2000 + i * 5000),
+  );
 startStats();
 startScheduler();
 

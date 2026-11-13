@@ -74,6 +74,38 @@ export async function installLoader(dir, mc, loaderId, javaPath, log) {
   await runInstaller(dir, path.basename(installer), javaPath, log);
 }
 
+/**
+ * Les Forge 1.16.5 antérieurs à 36.2.26 plantent au démarrage avec les Java récents
+ * (8u321+, 11.0.14+ : NoSuchMethodError ManifestEntryVerifier). On les remplace par la
+ * version de Forge 1.16.5 recommandée, compatible avec les mêmes mods.
+ */
+const FIXED_FORGE_1165 = [36, 2, 26];
+const FALLBACK_FORGE_1165 = '36.2.34';
+
+export function isBrokenForge1165(jarName) {
+  const m = String(jarName).match(/^forge-1\.16\.5-(\d+)\.(\d+)\.(\d+)\.jar$/i);
+  if (!m) return false;
+  const v = m.slice(1).map(Number);
+  for (let i = 0; i < 3; i++) if (v[i] !== FIXED_FORGE_1165[i]) return v[i] < FIXED_FORGE_1165[i];
+  return false;
+}
+
+async function upgradeBrokenForge(dir, launch, javaPath, log) {
+  const jar = launch.type === 'forge' && launch.args[0] === '-jar' ? launch.args[1] : null;
+  if (!jar || !isBrokenForge1165(jar)) return launch;
+  let target = FALLBACK_FORGE_1165;
+  try {
+    const promos = (await (await fetch('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json')).json()).promos;
+    target = promos['1.16.5-recommended'] || target;
+  } catch {
+    /* hors ligne : version de repli */
+  }
+  log(t('forge_upgrade', { from: jar.replace(/^forge-1\.16\.5-|\.jar$/gi, ''), to: target }));
+  await fsp.rm(path.join(dir, jar), { force: true });
+  await installLoader(dir, '1.16.5', `forge-${target}`, javaPath, log);
+  return detectLaunch(dir) || launch;
+}
+
 async function runInstaller(dir, jar, javaPath, log) {
   log(t('installer_running', { jar }));
   await runProcess(javaPath, ['-jar', jar, '--installServer'], { cwd: dir, log: (l) => log('  ' + l) });
@@ -202,6 +234,7 @@ export async function installPack(server, log) {
       launch = detectLaunch(dir);
     }
     if (!launch) throw err('launch_unknown');
+    launch = await upgradeBrokenForge(dir, launch, server.javaPath, log);
 
     fs.writeFileSync(path.join(dir, 'eula.txt'), 'eula=true\n');
     setProperties(path.join(dir, 'server.properties'), {

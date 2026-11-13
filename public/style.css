@@ -145,6 +145,17 @@ select.gm { padding: 4px 6px; font-size: 12px; }
 .tag.warn { color: #e8c170; border-color: #5c4b1f; }
 label.btn.disabled { opacity: .45; cursor: not-allowed; }
 
+/* Fichiers */
+.crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.crumbs a { color: var(--info); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.file-table { padding: 4px 12px; overflow-x: auto; }
+.file-table td { padding: 6px 10px; }
+.file-link { color: var(--text); text-decoration: none; word-break: break-all; }
+.file-link:hover { color: var(--info); }
+.editor { width: 100%; height: calc(100vh - 330px); min-height: 320px; font: 12.5px/1.5 ui-monospace, Consolas, "Cascadia Mono", monospace; tab-size: 2; white-space: pre; resize: vertical; }
+@media (max-width: 760px) { .hide-sm { display: none; } .editor { height: 60vh; } }
+
 /* Tâches planifiées */
 .sched-list { display: flex; flex-direction: column; gap: 10px; }
 .sched-row.off { opacity: .6; }

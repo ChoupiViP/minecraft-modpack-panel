@@ -105,6 +105,9 @@ function sampleUnix() {
 const SILENT_RE =
   /Mean tick time|Mean TPS|\bTPS \(|ms\/tick|The game is (running normally|frozen|sprinting)|Target tick rate|Average time per tick|Percentiles|Unknown or incomplete command|Incorrect argument for command|<--\[HERE\]/i;
 
+// Dernière ligne de chaque format de réponse (fin de la capture)
+const END_RE = /Overall|Percentiles|Unknown or incomplete command|Incorrect argument for command|<--\[HERE\]/i;
+
 function mcAtLeast(mc, target) {
   if (!mc) return false;
   const a = mc.split('.').map(Number);
@@ -150,7 +153,7 @@ async function pollTps() {
       inst.tpsUnsupported = true;
       continue;
     }
-    const lines = await querySilently(inst.id, cmd, SILENT_RE);
+    const lines = await querySilently(inst.id, cmd, SILENT_RE, { endRe: END_RE });
     const r = parseTps(lines);
     if (r) {
       inst.tps = Math.round(r.tps * 10) / 10;

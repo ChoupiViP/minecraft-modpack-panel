@@ -17,6 +17,10 @@ Un panel web léger, auto-hébergé, pour créer et gérer des **serveurs Minecr
 - **Performances** : CPU, RAM et TPS en direct, avec graphiques sur une heure et alertes de lag. Le TPS est lu via `forge tps`, `neoforge tps` ou `tick query` (1.20.3+), sans encombrer la console.
 - **Mods** : liste des mods installés avec leur vrai nom et leur version, activation ou désactivation en un clic (pratique quand un mod fait crasher le serveur), ajout de `.jar` par glisser-déposer, repérage des mods « client uniquement ».
 - **Tâches planifiées** : redémarrage chaque nuit avec annonces aux joueurs (5 min et 1 min avant), démarrage, arrêt, sauvegarde ou commande programmés selon les jours de la semaine.
+- **Gestionnaire de fichiers** : parcourir le dossier du serveur, modifier les configs (`.toml`, `.json`, `.cfg`…) dans le navigateur, envoyer, télécharger et supprimer des fichiers.
+- **Crash reports** : quand un serveur plante, le panel affiche la cause, les mods suspects et les dépendances manquantes, avec un lien vers le rapport complet.
+- **Notifications Discord** (webhook) : serveur en ligne ou arrêté, crash avec mods suspects, joueurs qui se connectent ou se déconnectent, sauvegardes ratées.
+- **Démarrage avec Windows** : le panel peut se lancer tout seul à l'ouverture de session (sans fenêtre), et chaque serveur peut démarrer automatiquement avec le panel.
 - **Plusieurs serveurs** en parallèle, chacun sur son port.
 - **Sauvegardes** manuelles ou planifiées. La sauvegarde du monde est mise en pause (`save-off` / `save-all`) pendant la copie. Les anciennes sauvegardes sont supprimées par rotation, et chaque sauvegarde peut être téléchargée ou restaurée.
 - Éditeur de `server.properties`, réglage de la RAM et des arguments JVM.
@@ -67,6 +71,29 @@ Ouvre ensuite `http://<ip-du-pc>:8080` sur ton téléphone. N'importe quel ident
 
 > Exposer le panel sur Internet est déconseillé. Préfère un VPN (Tailscale, WireGuard…) ou un reverse proxy avec HTTPS.
 
+## Démarrage automatique
+
+- **Windows** : dans **Paramètres → Démarrage avec Windows**, clique sur **Activer**. Le panel se lance alors sans fenêtre à l'ouverture de ta session, avec la même adresse, le même port et le même mot de passe qu'actuellement. Coche **Démarrer automatiquement quand le panel se lance** dans les réglages d'un serveur pour qu'il démarre aussi.
+- **Linux** : crée un service systemd, par exemple `/etc/systemd/system/mc-panel.service` :
+
+```ini
+[Unit]
+Description=Minecraft Modpack Panel
+After=network-online.target
+
+[Service]
+User=minecraft
+WorkingDirectory=/opt/minecraft-modpack-panel
+Environment=HOST=0.0.0.0 PANEL_PASSWORD=change-moi
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Puis lance `sudo systemctl enable --now mc-panel`.
+
 ## Versions de Java
 
 | Minecraft | Java |
@@ -75,9 +102,13 @@ Ouvre ensuite `http://<ip-du-pc>:8080` sur ton téléphone. N'importe quel ident
 | 1.17 – 1.20.4 | 17 |
 | ≥ 1.20.5 | 21 |
 
+Les anciens Forge 1.16.5 (avant 36.2.26) plantent avec les versions récentes de Java : le panel les met automatiquement à jour vers la version de Forge recommandée lors de l'installation d'un modpack.
+
 Le panel installe la version requise dans `data/java/` à l'installation d'un modpack. Tu peux aussi installer des versions depuis **Paramètres → Versions de Java**.
 
 ## Limites connues
+
+- Certaines clés API CurseForge n'ont pas le droit d'utiliser la recherche complète ni de lister toutes les versions d'un modpack. Le panel affiche alors les modpacks mis en avant et accepte un **ID de projet** (encadré « About Project » de la page du modpack) ; les versions proposées sont les dernières du modpack.
 
 - Certains auteurs interdisent le téléchargement de leurs mods via l'API CurseForge. Ces mods sont listés avec un lien pour les télécharger à la main.
 - Quand le serveur est construit depuis un pack client, un mod « client only » peut le faire planter. Dans ce cas, retire-le du dossier `mods`.

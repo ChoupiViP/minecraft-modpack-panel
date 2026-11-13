@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import archiver from 'archiver';
 import { BACKUPS_DIR, getServer, listServers } from './store.js';
-import { getInstance, sendCommand } from './process-manager.js';
+import { getInstance, sendCommand, events } from './process-manager.js';
 import { extractZip, readProperties } from './util.js';
 import { t, err } from './i18n.js';
 
@@ -64,6 +64,7 @@ export async function createBackup(server, { auto = false } = {}) {
   } catch (e) {
     await fsp.rm(dest + '.part', { force: true }).catch(() => {});
     inst.log(t('backup_failed', { error: e.message }));
+    events.emit('backup-failed', { id: server.id, error: e.message });
     throw e;
   } finally {
     if (running && inst.proc) sendCommand(server.id, 'save-on');

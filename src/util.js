@@ -86,7 +86,8 @@ export function lineSplitter(onLine) {
     buf += chunk.toString('utf8');
     const lines = buf.split(/\r?\n/);
     buf = lines.pop();
-    for (const l of lines) onLine(l.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ''));
+    // Retire les codes couleur ANSI et les codes de formatage Minecraft (§a, §l, §r…)
+    for (const l of lines) onLine(l.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/§[0-9a-fk-orx]/gi, ''));
   };
 }
 

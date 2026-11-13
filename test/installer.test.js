@@ -52,3 +52,12 @@ test('server.properties : modification en conservant commentaires et ordre', () 
   assert.match(text, /^#Minecraft server properties\nmotd=Nouveau\nserver-port=25570\npvp=true\nwhite-list=true\n$/);
   assert.deepEqual(readProperties(file), { motd: 'Nouveau', 'server-port': '25570', pvp: 'true', 'white-list': 'true' });
 });
+
+test('Forge 1.16.5 : détection des versions qui plantent avec les Java récents', async () => {
+  const { isBrokenForge1165 } = await import('../src/installer.js');
+  assert.equal(isBrokenForge1165('forge-1.16.5-36.2.20.jar'), true);
+  assert.equal(isBrokenForge1165('forge-1.16.5-36.1.0.jar'), true);
+  assert.equal(isBrokenForge1165('forge-1.16.5-36.2.26.jar'), false);
+  assert.equal(isBrokenForge1165('forge-1.16.5-36.2.39.jar'), false);
+  assert.equal(isBrokenForge1165('forge-1.12.2-14.23.5.2860.jar'), false);
+});
