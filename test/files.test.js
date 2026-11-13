@@ -34,7 +34,8 @@ test('refuse toute sortie du dossier du serveur', async () => {
   const server = makeServer();
   // Un chemin commençant par "/" est relatif à la racine du serveur : il ne doit jamais en sortir
   const rooted = await files.resolveInside(server, '/etc/passwd');
-  assert.ok(rooted.full.startsWith(fs.realpathSync(server.dir) + path.sep), '/etc/passwd doit rester dans le dossier du serveur');
+  // realpathSync.native, comme le panel : résout aussi les noms courts Windows (ex. RUNNER~1 sur la CI)
+  assert.ok(rooted.full.startsWith(fs.realpathSync.native(server.dir) + path.sep), '/etc/passwd doit rester dans le dossier du serveur');
   for (const bad of ['../secret.txt', 'config/../../secret.txt', '..\\secret.txt', 'C:\\Windows\\win.ini', 'C:/Windows']) {
     await assert.rejects(files.readText(server, bad), (e) => e.code === 'path_invalid', `${bad} devrait être refusé`);
     await assert.rejects(files.writeText(server, bad, 'x'), (e) => e.code === 'path_invalid', `${bad} devrait être refusé en écriture`);
