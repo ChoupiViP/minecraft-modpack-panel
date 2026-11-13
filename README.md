@@ -15,10 +15,16 @@ A lightweight, self-hosted web panel to create and manage **modded Minecraft ser
 - **Controls**: start, graceful stop, restart and kill. The server restarts automatically after a crash.
 - **Players**: online list, op/deop, kick, ban/unban, whitelist, game mode and returning players.
 - **Performance**: live CPU, RAM and TPS with one-hour charts and lag warnings. TPS is read with `forge tps`, `neoforge tps` or `tick query` (1.20.3+), without cluttering the console.
+- **Mods**: list installed mods with their real name and version, enable/disable one in a click (handy when a mod crashes the server), add `.jar` files by drag and drop, and spot *client-only* mods.
+- **Scheduled tasks**: nightly restart with in-game warnings (5 min and 1 min before), scheduled start/stop/backup/command, per day of the week.
 - **Multiple servers** side by side, each on its own port.
 - **Backups**: manual or scheduled. Saving is paused (`save-off` / `save-all`) during the copy. Old backups are rotated out, and backups can be downloaded or restored.
 - `server.properties` editor, RAM and JVM argument settings.
 - **Bilingual interface** (English / Français) that also works on mobile.
+
+| Mods | Scheduled tasks |
+|---|---|
+| ![Mods](docs/screenshots/mods.png) | ![Scheduled tasks](docs/screenshots/schedules.png) |
 
 | Players | Console | Mobile |
 |---|---|---|
@@ -94,12 +100,15 @@ src/installer.js        modpack + loader installation, launch detection
 src/process-manager.js  Java processes, console, status, players, auto-restart
 src/stats.js            CPU / RAM / TPS sampling
 src/players.js          player management (ops, whitelist, bans)
-src/backups.js          zip backups + scheduler
+src/backups.js          zip backups + automatic backup interval
+src/mods.js             mod list (jar metadata), enable/disable, upload
+src/scheduler.js        scheduled tasks (restart, start, stop, backup, command)
 src/java.js             Java detection and download (Adoptium)
 src/curseforge.js       CurseForge API client
 src/i18n.js             backend messages (FR / EN)
 public/                 web UI (plain HTML/CSS/JS, no build step)
 public/i18n.js          UI translations (FR / EN)
+test/                   automated tests (node:test)
 data/                   servers, backups, Java, settings (created at runtime, git-ignored)
 ```
 
@@ -108,6 +117,8 @@ data/                   servers, backups, Java, settings (created at runtime, gi
 Issues and pull requests are welcome.
 
 - The project has **no build step**: edit the files and refresh the page. Run `npm run dev` to restart the server when the backend changes.
+- Run `npm test` before opening a pull request. The tests use Node's built-in test runner, so there's nothing extra to install. CI runs them on Linux and Windows.
+- Every new UI or backend message must be added in **both** languages. A test checks this.
 - To **add a language**, copy the `en` block in [`public/i18n.js`](public/i18n.js) and [`src/i18n.js`](src/i18n.js), translate the values, then register it in `LANGS`.
 
 ## License

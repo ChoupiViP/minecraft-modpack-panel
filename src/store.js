@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const DATA_DIR = path.join(ROOT, 'data');
+// Dossier des données (serveurs, sauvegardes, Java, paramètres) ; surchargeable pour les tests / Docker.
+export const DATA_DIR = process.env.PANEL_DATA_DIR ? path.resolve(process.env.PANEL_DATA_DIR) : path.join(ROOT, 'data');
 export const SERVERS_DIR = path.join(DATA_DIR, 'servers');
 export const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 export const TMP_DIR = path.join(DATA_DIR, 'tmp');
@@ -59,7 +60,7 @@ export function getServer(id) {
 
 export function createServer(data) {
   const slug = (data.name || 'serveur')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // retire les accents
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'serveur';
   const id = `${slug}-${crypto.randomBytes(3).toString('hex')}`;
   const server = {
@@ -77,6 +78,7 @@ export function createServer(data) {
     loader: null,
     installed: false,
     missingMods: [],
+    schedules: [],
     createdAt: new Date().toISOString(),
   };
   fs.mkdirSync(server.dir, { recursive: true });

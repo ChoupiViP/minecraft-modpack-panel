@@ -15,6 +15,8 @@ import { readProperties, setProperties } from './util.js';
 import { findJavaInstalls, recommendedJava, installJava, javaJobs, javaEvents } from './java.js';
 import { getPlayers, playerAction } from './players.js';
 import { startStats, stopStats, statsEvents, systemInfo, tpsCommand } from './stats.js';
+import { listMods, setModEnabled, deleteMod, addMod } from './mods.js';
+import { normalizeSchedules, nextRun, startScheduler } from './scheduler.js';
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT) || 8080;
@@ -223,6 +225,35 @@ app.get('/api/servers/:id/stats', wrap(async (req, res) => {
   });
 }));
 
+// ---------- Mods ----------
+app.get('/api/servers/:id/mods', wrap(async (req, res) => {
+  const s = serverOr404(req);
+  res.json({ mods: await listMods(s), running: Boolean(pm.getInstance(s.id).proc) });
+}));
+app.post('/api/servers/:id/mods/:file/toggle', wrap(async (req, res) => {
+  res.json({ fileName: await setModEnabled(serverOr404(req), req.params.file, Boolean(req.body?.enabled)) });
+}));
+app.delete('/api/servers/:id/mods/:file', wrap(async (req, res) => {
+  await deleteMod(serverOr404(req), req.params.file);
+  res.json({ ok: true });
+}));
+// Upload d'un .jar : corps brut, nom de fichier dans ?name=
+app.post('/api/servers/:id/mods', express.raw({ type: () => true, limit: '256mb' }), wrap(async (req, res) => {
+  res.status(201).json({ fileName: await addMod(serverOr404(req), String(req.query.name || ''), req.body) });
+}));
+
+// ---------- Tâches planifiées ----------
+app.get('/api/servers/:id/schedules', wrap(async (req, res) => {
+  const s = serverOr404(req);
+  res.json((s.schedules || []).map((sc) => ({ ...sc, nextRun: nextRun(sc) })));
+}));
+app.put('/api/servers/:id/schedules', wrap(async (req, res) => {
+  const s = serverOr404(req);
+  const schedules = normalizeSchedules(req.body);
+  store.updateServer(s.id, { schedules });
+  res.json(schedules.map((sc) => ({ ...sc, nextRun: nextRun(sc) })));
+}));
+
 app.get('/api/servers/:id/logs', wrap(async (req, res) => res.json(pm.getInstance(serverOr404(req).id).logs)));
 
 app.get('/api/servers/:id/properties', wrap(async (req, res) => {
@@ -284,6 +315,7 @@ for (const s of store.listServers()) {
 
 backups.startScheduler();
 startStats();
+startScheduler();
 
 httpServer.listen(PORT, HOST, () => {
   console.log(t('panel_ready', { url: `http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}` }));

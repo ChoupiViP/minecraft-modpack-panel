@@ -15,6 +15,8 @@ Un panel web léger, auto-hébergé, pour créer et gérer des **serveurs Minecr
 - **Contrôles** : démarrer, arrêter proprement, redémarrer, forcer l'arrêt. Le serveur redémarre automatiquement après un crash.
 - **Joueurs** : liste des joueurs en ligne, op/deop, expulsion, bannissement, whitelist, mode de jeu, joueurs déjà venus.
 - **Performances** : CPU, RAM et TPS en direct, avec graphiques sur une heure et alertes de lag. Le TPS est lu via `forge tps`, `neoforge tps` ou `tick query` (1.20.3+), sans encombrer la console.
+- **Mods** : liste des mods installés avec leur vrai nom et leur version, activation ou désactivation en un clic (pratique quand un mod fait crasher le serveur), ajout de `.jar` par glisser-déposer, repérage des mods « client uniquement ».
+- **Tâches planifiées** : redémarrage chaque nuit avec annonces aux joueurs (5 min et 1 min avant), démarrage, arrêt, sauvegarde ou commande programmés selon les jours de la semaine.
 - **Plusieurs serveurs** en parallèle, chacun sur son port.
 - **Sauvegardes** manuelles ou planifiées. La sauvegarde du monde est mise en pause (`save-off` / `save-all`) pendant la copie. Les anciennes sauvegardes sont supprimées par rotation, et chaque sauvegarde peut être téléchargée ou restaurée.
 - Éditeur de `server.properties`, réglage de la RAM et des arguments JVM.
@@ -87,6 +89,8 @@ Le panel installe la version requise dans `data/java/` à l'installation d'un mo
 Les issues et les pull requests sont les bienvenues.
 
 - Le projet n'a **pas d'étape de build** : modifie les fichiers et recharge la page. `npm run dev` relance le serveur à chaque modification du backend.
+- Lance `npm test` avant d'ouvrir une pull request. Les tests utilisent le lanceur intégré à Node, donc rien à installer. La CI les exécute sous Linux et Windows.
+- Chaque nouveau message de l'interface ou du backend doit être ajouté dans les **deux** langues. Un test le vérifie.
 - Pour **ajouter une langue**, copie le bloc `en` de [`public/i18n.js`](public/i18n.js) et de [`src/i18n.js`](src/i18n.js), traduis les valeurs, puis ajoute-la à `LANGS`.
 
 ## Licence

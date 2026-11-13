@@ -2,7 +2,7 @@
 // La langue suit le réglage `language` du panel (modifiable depuis l'interface).
 import { getSettings } from './store.js';
 
-const messages = {
+export const messages = {
   fr: {
     // Général / HTTP
     auth_required: 'Authentification requise',
@@ -83,6 +83,26 @@ const messages = {
     backup_not_found: 'Sauvegarde introuvable.',
     restore_started: '[Panel] Restauration de {name}...',
     restore_done: '[Panel] Restauration terminée (ancien monde conservé dans "{folder}").',
+    // Mods
+    mod_invalid_name: 'Nom de fichier de mod invalide (un .jar est attendu).',
+    mod_not_found: 'Mod introuvable.',
+    mod_exists: 'Un mod avec ce nom de fichier existe déjà.',
+    mod_not_jar: "Ce fichier n'est pas un .jar valide.",
+    stop_before_mods: 'Arrête le serveur avant de modifier les mods.',
+    // Tâches planifiées
+    sched_invalid: 'Tâche planifiée invalide (vérifie le type, l’heure et la commande).',
+    sched_warn_restart: '⚠ Redémarrage du serveur dans {n} minute(s) !',
+    sched_warn_stop: '⚠ Arrêt du serveur dans {n} minute(s) !',
+    sched_now_restart: 'Redémarrage du serveur maintenant !',
+    sched_now_stop: 'Arrêt du serveur maintenant !',
+    sched_type_restart: 'redémarrage',
+    sched_type_start: 'démarrage',
+    sched_type_stop: 'arrêt',
+    sched_type_backup: 'sauvegarde',
+    sched_type_command: 'commande',
+    sched_ran: '[Panel] Tâche planifiée : {task}',
+    sched_skipped: '[Panel] Tâche planifiée ignorée ({task}) : état du serveur incompatible.',
+    sched_failed: '[Panel] Échec de la tâche planifiée : {error}',
   },
   en: {
     auth_required: 'Authentication required',
@@ -156,6 +176,24 @@ const messages = {
     backup_not_found: 'Backup not found.',
     restore_started: '[Panel] Restoring {name}...',
     restore_done: '[Panel] Restore complete (previous world kept in "{folder}").',
+    mod_invalid_name: 'Invalid mod file name (a .jar is expected).',
+    mod_not_found: 'Mod not found.',
+    mod_exists: 'A mod with this file name already exists.',
+    mod_not_jar: 'This file is not a valid .jar.',
+    stop_before_mods: 'Stop the server before changing mods.',
+    sched_invalid: 'Invalid scheduled task (check the type, time and command).',
+    sched_warn_restart: '⚠ Server restart in {n} minute(s)!',
+    sched_warn_stop: '⚠ Server shutdown in {n} minute(s)!',
+    sched_now_restart: 'Restarting the server now!',
+    sched_now_stop: 'Shutting down the server now!',
+    sched_type_restart: 'restart',
+    sched_type_start: 'start',
+    sched_type_stop: 'stop',
+    sched_type_backup: 'backup',
+    sched_type_command: 'command',
+    sched_ran: '[Panel] Scheduled task: {task}',
+    sched_skipped: '[Panel] Scheduled task skipped ({task}): server state does not allow it.',
+    sched_failed: '[Panel] Scheduled task failed: {error}',
   },
 };
 

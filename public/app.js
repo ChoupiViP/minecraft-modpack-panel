@@ -11,7 +11,8 @@ const state = {
 
 // ---------- Utilitaires ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const fmtSize = (b) => (b > 1073741824 ? `${(b / 1073741824).toFixed(2)} ${t('units.gb')}` : `${(b / 1048576).toFixed(1)} ${t('units.mb')}`);
+const fmtSize = (b) =>
+  b >= 1073741824 ? `${(b / 1073741824).toFixed(2)} ${t('units.gb')}` : b >= 1048576 ? `${(b / 1048576).toFixed(1)} ${t('units.mb')}` : `${Math.max(1, Math.round(b / 1024))} ${t('units.kb')}`;
 const fmtRam = (mb) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} ${t('units.gb')}` : `${Math.round(mb)} ${t('units.mb')}`);
 const fmtDate = (d) => new Date(d).toLocaleString(locale());
 const fmtTime = (d, opts) => new Date(d).toLocaleTimeString(locale(), opts);
@@ -384,7 +385,7 @@ async function renderPackSetup(modId, packName) {
 function renderServer() {
   const s = state.servers.get(state.view.id);
   const tab = state.view.tab || 'console';
-  const tabs = ['console', 'players', 'perf', 'settings', 'backups'];
+  const tabs = ['console', 'players', 'perf', 'mods', 'schedules', 'settings', 'backups'];
   main.innerHTML = `
     <div class="server-head">
       <div style="flex:1;min-width:260px">
@@ -405,7 +406,16 @@ function renderServer() {
   );
   renderStatus();
   renderAlerts(s);
-  const tabFn = { console: tabConsole, players: tabPlayers, perf: tabPerf, settings: tabSettings, backups: tabBackups, properties: tabProperties };
+  const tabFn = {
+    console: tabConsole,
+    players: tabPlayers,
+    perf: tabPerf,
+    mods: tabMods,
+    schedules: tabSchedules,
+    settings: tabSettings,
+    backups: tabBackups,
+    properties: tabProperties,
+  };
   (tabFn[tab] || tabConsole)(s);
 }
 
@@ -724,6 +734,242 @@ function niceCeil(v) {
   return [1, 2, 2.5, 5, 10].map((m) => m * p).find((n) => n >= v);
 }
 
+// --- Onglet mods ---
+const modsView = { id: null, mods: [], running: false, query: '', filter: 'all' };
+
+async function tabMods(s) {
+  const box = $('#tab-content');
+  box.innerHTML = `<p class="muted">${t('common.loading')}</p>`;
+  await loadMods(s.id);
+}
+
+async function loadMods(id) {
+  const box = $('#tab-content');
+  let data;
+  try {
+    data = await api(`/servers/${id}/mods`);
+  } catch (e) {
+    box.innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+    return;
+  }
+  if (state.view.id !== id || state.view.tab !== 'mods') return;
+  const keep = modsView.id === id ? { query: modsView.query, filter: modsView.filter } : { query: '', filter: 'all' };
+  Object.assign(modsView, { id, ...data, ...keep });
+  const dis = data.running ? 'disabled' : '';
+  box.innerHTML = `
+    ${data.running ? `<div class="warn-box">${t('mods.mustStop')}</div>` : ''}
+    <div class="row" style="margin-bottom:12px">
+      <input id="mod-q" placeholder="${esc(t('mods.filterPh'))}" value="${esc(modsView.query)}" style="flex:1;min-width:180px">
+      <select id="mod-filter">${['all', 'enabled', 'disabled', 'client']
+        .map((f) => `<option value="${f}" ${f === modsView.filter ? 'selected' : ''}>${t('mods.filter' + f[0].toUpperCase() + f.slice(1))}</option>`)
+        .join('')}</select>
+      <label class="btn primary ${dis}" id="mod-upload-label">${t('mods.upload')}
+        <input type="file" id="mod-upload" accept=".jar" multiple hidden ${dis}></label>
+    </div>
+    <p class="small muted" id="mod-count"></p>
+    <div id="mod-list" class="mod-list ${data.running ? '' : 'droppable'}"></div>
+    <p class="small muted" style="margin-top:12px">${t('mods.restartHint')}${data.running ? '' : ' · ' + t('mods.dropHint')}</p>`;
+
+  $('#mod-q').addEventListener('input', (e) => {
+    modsView.query = e.target.value;
+    renderModList();
+  });
+  $('#mod-filter').addEventListener('change', (e) => {
+    modsView.filter = e.target.value;
+    renderModList();
+  });
+  $('#mod-upload').addEventListener('change', (e) => uploadMods(id, [...e.target.files]));
+  const list = $('#mod-list');
+  if (!data.running) {
+    list.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      list.classList.add('drag');
+    });
+    list.addEventListener('dragleave', () => list.classList.remove('drag'));
+    list.addEventListener('drop', (e) => {
+      e.preventDefault();
+      list.classList.remove('drag');
+      uploadMods(id, [...e.dataTransfer.files].filter((f) => f.name.toLowerCase().endsWith('.jar')));
+    });
+  }
+  renderModList();
+}
+
+function renderModList() {
+  const list = $('#mod-list');
+  if (!list) return;
+  const { mods, running, query, filter } = modsView;
+  const q = query.trim().toLowerCase();
+  const shown = mods.filter((m) => {
+    if (filter === 'enabled' && !m.enabled) return false;
+    if (filter === 'disabled' && m.enabled) return false;
+    if (filter === 'client' && !m.clientOnly) return false;
+    return !q || [m.name, m.modId, m.fileName, m.description].some((v) => String(v || '').toLowerCase().includes(q));
+  });
+  $('#mod-count').textContent = t('mods.count', { n: mods.length, enabled: mods.filter((m) => m.enabled).length });
+  const dis = running ? 'disabled' : '';
+  list.innerHTML = shown.length
+    ? shown
+        .map(
+          (m) => `<div class="mod-row ${m.enabled ? '' : 'off'}">
+        <div class="mod-main">
+          <div><b>${esc(m.name || m.fileName)}</b> <span class="muted small">${esc(m.version || '')}</span>
+            ${m.enabled ? '' : `<span class="tag">${t('mods.disabledTag')}</span>`}
+            ${m.clientOnly ? `<span class="tag warn" title="${esc(t('mods.clientOnlyTitle'))}">⚠ ${t('mods.clientOnly')}</span>` : ''}</div>
+          ${m.description ? `<div class="small muted mod-desc">${esc(m.description)}</div>` : ''}
+          <div class="small muted mono">${esc(m.fileName)} · ${fmtSize(m.size)}</div>
+        </div>
+        <div class="row">
+          <button class="btn sm" data-toggle="${esc(m.fileName)}" data-enabled="${m.enabled ? 0 : 1}" ${dis}>${m.enabled ? t('mods.disable') : t('mods.enable')}</button>
+          <button class="btn sm danger" data-delmod="${esc(m.fileName)}" data-name="${esc(m.name || m.fileName)}" ${dis}>${t('common.delete')}</button>
+        </div></div>`,
+        )
+        .join('')
+    : `<p class="muted">${mods.length ? t('mods.noMatch') : t('mods.none')}</p>`;
+
+  const id = modsView.id;
+  list.querySelectorAll('[data-toggle]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const ok = await act(() =>
+        api(`/servers/${id}/mods/${encodeURIComponent(b.dataset.toggle)}/toggle`, { method: 'POST', body: { enabled: b.dataset.enabled === '1' } }),
+      );
+      if (ok) loadMods(id);
+    }),
+  );
+  list.querySelectorAll('[data-delmod]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (!confirm(t('mods.deleteConfirm', { name: b.dataset.name }))) return;
+      const ok = await act(() => api(`/servers/${id}/mods/${encodeURIComponent(b.dataset.delmod)}`, { method: 'DELETE' }), t('mods.deleted'));
+      if (ok) loadMods(id);
+    }),
+  );
+}
+
+async function uploadMods(id, files) {
+  if (!files.length) return;
+  let added = 0;
+  for (const file of files) {
+    toast(t('mods.uploading', { name: file.name }));
+    try {
+      const res = await fetch(`/api/servers/${id}/mods?name=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/java-archive' },
+        body: file,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      added++;
+    } catch (e) {
+      toast(`${file.name} : ${e.message}`, true);
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  if (added) toast(t('mods.uploaded', { n: added }));
+  loadMods(id);
+}
+
+// --- Onglet tâches planifiées ---
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // lundi → dimanche
+const dayName = (d) => new Intl.DateTimeFormat(locale(), { weekday: 'short' }).format(new Date(2024, 0, 7 + d)); // 07/01/2024 = dimanche
+const schedView = { id: null, list: [], dirty: false };
+
+async function tabSchedules(s) {
+  const box = $('#tab-content');
+  box.innerHTML = `<p class="muted">${t('common.loading')}</p>`;
+  try {
+    schedView.list = await api(`/servers/${s.id}/schedules`);
+  } catch (e) {
+    box.innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+    return;
+  }
+  if (state.view.id !== s.id || state.view.tab !== 'schedules') return;
+  schedView.id = s.id;
+  schedView.dirty = false;
+  renderSchedules();
+}
+
+function renderSchedules() {
+  const box = $('#tab-content');
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const types = ['restart', 'start', 'stop', 'backup', 'command'];
+  box.innerHTML = `
+    <p class="small muted">${t('sched.help', { tz: esc(tz) })}</p>
+    <div id="sched-list" class="sched-list">${
+      schedView.list.length
+        ? schedView.list
+            .map(
+              (sc, i) => `<div class="sched-row card ${sc.enabled ? '' : 'off'}" data-i="${i}">
+          <div class="row">
+            <label class="check" style="margin:0" title="${esc(t('sched.enabled'))}"><input type="checkbox" data-f="enabled" ${sc.enabled ? 'checked' : ''}></label>
+            <select data-f="type">${types.map((ty) => `<option value="${ty}" ${ty === sc.type ? 'selected' : ''}>${t('sched.type.' + ty)}</option>`).join('')}</select>
+            <span class="muted">${t('sched.at')}</span>
+            <input type="time" data-f="time" value="${esc(sc.time)}" required>
+            ${sc.type === 'command' ? `<input data-f="command" value="${esc(sc.command)}" placeholder="${esc(t('sched.commandPh'))}" style="flex:1;min-width:160px">` : ''}
+            <span class="spacer"></span>
+            <button class="btn sm danger" data-remove="${i}">${t('sched.remove')}</button>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <div class="days">${DAY_ORDER.map((d) => `<button type="button" class="day-btn ${sc.days.includes(d) ? 'on' : ''}" data-day="${d}">${esc(dayName(d))}</button>`).join('')}</div>
+            <span class="small muted">${sc.days.length ? '' : t('sched.everyday')}</span>
+            ${sc.type === 'restart' || sc.type === 'stop' ? `<label class="check small" style="margin:0"><input type="checkbox" data-f="warn" ${sc.warn ? 'checked' : ''}> ${t('sched.warn')}</label>` : ''}
+          </div>
+          <div class="small muted" style="margin-top:8px">${
+            !sc.enabled ? t('sched.disabled') : sc.nextRun && !schedView.dirty ? t('sched.next', { date: fmtDate(sc.nextRun) }) : ''
+          }</div>
+        </div>`,
+            )
+            .join('')
+        : `<p class="muted">${t('sched.none')}</p>`
+    }</div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="sched-add">${t('sched.add')}</button>
+      <span class="spacer"></span>
+      <span class="small muted">${schedView.dirty ? t('sched.unsaved') : ''}</span>
+      <button class="btn primary" id="sched-save" ${schedView.dirty ? '' : 'disabled'}>${t('common.save')}</button>
+    </div>`;
+
+  const changed = () => {
+    schedView.dirty = true;
+    renderSchedules();
+  };
+  box.querySelectorAll('.sched-row').forEach((row) => {
+    const sc = schedView.list[Number(row.dataset.i)];
+    row.querySelectorAll('[data-f]').forEach((input) =>
+      input.addEventListener('change', () => {
+        const f = input.dataset.f;
+        sc[f] = input.type === 'checkbox' ? input.checked : input.value;
+        if (f === 'type' && (sc.type === 'restart' || sc.type === 'stop') && sc.warn === undefined) sc.warn = true;
+        changed();
+      }),
+    );
+    row.querySelectorAll('[data-day]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const d = Number(b.dataset.day);
+        sc.days = sc.days.includes(d) ? sc.days.filter((x) => x !== d) : [...sc.days, d];
+        changed();
+      }),
+    );
+  });
+  box.querySelectorAll('[data-remove]').forEach((b) =>
+    b.addEventListener('click', () => {
+      schedView.list.splice(Number(b.dataset.remove), 1);
+      changed();
+    }),
+  );
+  $('#sched-add').addEventListener('click', () => {
+    schedView.list.push({ type: 'restart', time: '04:00', days: [], command: '', warn: true, enabled: true });
+    changed();
+  });
+  $('#sched-save').addEventListener('click', async () => {
+    const saved = await act(() => api(`/servers/${schedView.id}/schedules`, { method: 'PUT', body: schedView.list }), t('sched.saved'));
+    if (saved) {
+      schedView.list = saved;
+      schedView.dirty = false;
+      renderSchedules();
+    }
+  });
+}
+
 // --- Onglet réglages ---
 async function tabSettings(s) {
   const javas = await getJavas();
@@ -872,6 +1118,7 @@ function connectWs() {
           renderStatus();
           if (prev !== msg.status) renderAlerts(s);
           if (state.view.tab === 'players') loadPlayers(s.id);
+          if (state.view.tab === 'mods' && Boolean(prev === 'stopped' || prev === 'crashed') !== Boolean(msg.status === 'stopped' || msg.status === 'crashed')) loadMods(s.id);
         }
       }
     } else if (msg.type === 'stats') {
