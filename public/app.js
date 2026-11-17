@@ -187,9 +187,12 @@ async function renderSettings() {
           <button class="btn ${settings.autostart.enabled ? '' : 'primary'}" id="autostart-toggle">${settings.autostart.enabled ? t('settings.autostartDisable') : t('settings.autostartEnable')}</button></div>`
         : ''}
     </div>
+    <h2>${t('bot.title')}</h2>
+    <div class="card form" id="bot-card"><p class="muted">${t('common.loading')}</p></div>
     <h2>${t('java.title')}</h2>
     <p class="muted small">${t('java.help')}</p>
     <div class="card form"><table>${[21, 17, 8].map(javaRow).join('')}</table></div>`;
+  renderBotCard();
   $('#settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
@@ -204,6 +207,83 @@ async function renderSettings() {
     if (ok) renderSettings();
   });
   bindJavaButtons(main);
+}
+
+// ---------- Bot Discord ----------
+const BOT_REPO = 'https://github.com/ChoupiViP/minecraft-modpack-panel-bot';
+
+async function renderBotCard(data) {
+  const card = $('#bot-card');
+  if (!card) return;
+  const b = data || (await api('/bot').catch(() => null));
+  if (!b || !$('#bot-card')) return;
+  const ago = (ts) => (ts ? new Date(ts).toLocaleTimeString() : '');
+  const tunnelLine = {
+    off: t('bot.tunnelOff'),
+    downloading: t('bot.tunnelDownloading'),
+    starting: t('bot.tunnelStarting'),
+    on: t('bot.tunnelOn', { url: link(b.tunnelState.url, b.tunnelState.url) }),
+    error: `<span class="err">${t('bot.tunnelError', { error: esc(b.tunnelState.error) })}</span>`,
+  }[b.tunnelState.status];
+  let linkLine = b.url ? t('bot.linkPending') : t('bot.linkNone');
+  if (b.link.ok === true) linkLine = `✔ ${t('bot.linkOk', { bot: esc(b.link.bot || '?'), time: ago(b.link.at) })}`;
+  else if (b.link.ok === false) linkLine = `<span class="err">✖ ${t('bot.linkFailed', { error: esc(b.link.error), time: ago(b.link.at) })}</span>`;
+  const warn = b.link.ok === true && b.link.error ? `<br><span class="err">${esc(b.link.error)}</span>` : '';
+  card.innerHTML = `
+    <p class="muted small" style="margin-top:0">${t('bot.help', { link: link(BOT_REPO, 'minecraft-modpack-panel-bot') })}</p>
+    <form id="bot-form" class="form">
+      <label class="field"><span>${t('bot.url')}</span>
+        <input name="url" value="${esc(b.url)}" placeholder="https://mon-bot.onrender.com" autocomplete="off">
+      </label>
+      <div class="field"><span>${t('bot.secret')}</span>
+        <div class="row"><input id="bot-secret" value="${esc(b.secret)}" readonly style="flex:1;font-family:monospace">
+          <button type="button" class="btn" id="bot-copy">${t('bot.copy')}</button>
+          <button type="button" class="btn" id="bot-regen">${t('bot.regenerate')}</button></div>
+        <span class="small muted">${t('bot.secretHelp')}</span>
+      </div>
+      <label class="check"><input type="checkbox" name="tunnel" ${b.tunnel ? 'checked' : ''} ${b.hasPassword ? '' : 'disabled'}> ${t('bot.tunnel')}</label>
+      <span class="small muted" style="display:block;margin-bottom:14px">${b.hasPassword ? t('bot.tunnelHelp') : `<span class="err">${t('bot.needPassword')}</span>`}</span>
+      <label class="field"><span>${t('bot.publicUrl')}</span>
+        <input name="publicUrl" value="${esc(b.publicUrl)}" placeholder="https://panel.mondomaine.fr" autocomplete="off">
+        <span class="small muted">${t('bot.publicUrlHelp')}</span>
+      </label>
+      <p class="small" style="margin:0">🌐 ${tunnelLine}<br>🤖 ${linkLine}${warn}</p>
+      <div class="row">
+        <button class="btn primary">${t('common.save')}</button>
+        <button type="button" class="btn" id="bot-ping" ${b.url ? '' : 'disabled'}>${t('bot.ping')}</button>
+        ${b.url ? `<a class="btn" href="${esc(`${b.link.configUrl || b.url}/#key=${encodeURIComponent(b.secret)}`)}" target="_blank" rel="noopener noreferrer">${t('bot.openConfig')}</a>` : ''}
+        <button type="button" class="btn ghost" id="bot-refresh">↻</button>
+      </div>
+    </form>`;
+  $('#bot-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const body = { url: f.url.value, publicUrl: f.publicUrl.value };
+    if (b.hasPassword) body.tunnel = f.tunnel.checked;
+    let res;
+    const ok = await act(async () => (res = await api('/bot', { method: 'PUT', body })), t('settings.saved'));
+    if (ok) renderBotCard(res);
+  });
+  $('#bot-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(b.secret);
+      toast(t('bot.copied'));
+    } catch {
+      $('#bot-secret').select();
+    }
+  });
+  $('#bot-regen').addEventListener('click', async () => {
+    if (!confirm(t('bot.regenerateConfirm'))) return;
+    let res;
+    if (await act(async () => (res = await api('/bot/secret', { method: 'POST' })))) renderBotCard(res);
+  });
+  $('#bot-ping').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = t('bot.pinging');
+    const res = await api('/bot/ping', { method: 'POST' }).catch(() => null);
+    renderBotCard(res || undefined);
+  });
+  $('#bot-refresh').addEventListener('click', () => renderBotCard());
 }
 
 // ---------- Java ----------

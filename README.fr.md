@@ -20,6 +20,7 @@ Un panel web léger, auto-hébergé, pour créer et gérer des **serveurs Minecr
 - **Gestionnaire de fichiers** : parcourir le dossier du serveur, modifier les configs (`.toml`, `.json`, `.cfg`…) dans le navigateur, envoyer, télécharger et supprimer des fichiers.
 - **Crash reports** : quand un serveur plante, le panel affiche la cause, les mods suspects et les dépendances manquantes, avec un lien vers le rapport complet.
 - **Notifications Discord** (webhook) : serveur en ligne ou arrêté, crash avec mods suspects, joueurs qui se connectent ou se déconnectent, sauvegardes ratées.
+- **Bot Discord** ([minecraft-modpack-panel-bot](https://github.com/ChoupiViP/minecraft-modpack-panel-bot)) : message de statut en direct, `/start`, `/stop`, console à distance et chat Minecraft ↔ Discord. Le panel lui donne une clé à accès limité et peut ouvrir un tunnel Cloudflare gratuit pour que le bot soit hébergé ailleurs (Render…).
 - **Démarrage avec Windows** : le panel peut se lancer tout seul à l'ouverture de session (sans fenêtre), et chaque serveur peut démarrer automatiquement avec le panel.
 - **Plusieurs serveurs** en parallèle, chacun sur son port.
 - **Sauvegardes** manuelles ou planifiées. La sauvegarde du monde est mise en pause (`save-off` / `save-all`) pendant la copie. Les anciennes sauvegardes sont supprimées par rotation, et chaque sauvegarde peut être téléchargée ou restaurée.
@@ -70,6 +71,16 @@ Ouvre ensuite `http://<ip-du-pc>:8080` sur ton téléphone. N'importe quel ident
 | `PANEL_PASSWORD` | *(aucun)* | Active l'authentification HTTP Basic |
 
 > Exposer le panel sur Internet est déconseillé. Préfère un VPN (Tailscale, WireGuard…) ou un reverse proxy avec HTTPS.
+
+## Bot Discord
+
+Le bot [minecraft-modpack-panel-bot](https://github.com/ChoupiViP/minecraft-modpack-panel-bot) contrôle le panel depuis Discord. Dans **Paramètres → Bot Discord** :
+
+- **Clé du bot** : copie-la dans la variable `BOT_SECRET` du bot. Elle donne seulement accès à la liste des serveurs, au démarrage, à l'arrêt, au redémarrage, à la console et aux réglages du bot (pas aux fichiers, mods, sauvegardes ni paramètres du panel). **Régénérer** la révoque immédiatement.
+- **Tunnel Cloudflare** : rend le panel joignable en HTTPS depuis Internet sans ouvrir de port, pour héberger le bot ailleurs (Render…). `cloudflared` est téléchargé automatiquement (Windows et Linux ; sur macOS, `brew install cloudflared`). Le panel doit être lancé avec `PANEL_PASSWORD`.
+- Le panel envoie son adresse actuelle au bot toutes les 5 minutes, ce qui garde aussi éveillé un service Render gratuit. Les réglages du bot (salons, rôles, chat) sont enregistrés par le panel dans `data/bot.json`.
+
+L'installation complète est décrite dans le README du bot.
 
 ## Démarrage automatique
 

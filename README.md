@@ -20,6 +20,7 @@ A lightweight, self-hosted web panel to create and manage **modded Minecraft ser
 - **File manager**: browse the server folder, edit configs (`.toml`, `.json`, `.cfg`…) in the browser, upload, download and delete files.
 - **Crash reports**: when a server crashes, the panel shows the cause, the suspected mods and the missing dependencies, with a link to the full report.
 - **Discord notifications** (webhook): server online/stopped, crash with suspected mods, players joining/leaving, failed backups.
+- **Discord bot** ([minecraft-modpack-panel-bot](https://github.com/ChoupiViP/minecraft-modpack-panel-bot)): live status message, `/start`, `/stop`, remote console and Minecraft ↔ Discord chat. The panel gives it a limited-access key and can open a free Cloudflare tunnel so the bot can be hosted elsewhere (e.g. Render).
 - **Start with Windows**: the panel can start itself at login (no window), and each server can start automatically with the panel.
 - **Multiple servers** side by side, each on its own port.
 - **Backups**: manual or scheduled. Saving is paused (`save-off` / `save-all`) during the copy. Old backups are rotated out, and backups can be downloaded or restored.
@@ -81,6 +82,16 @@ Then open `http://<your-pc-ip>:8080` on your phone. Any username works with the 
 
 > Exposing the panel to the internet is not recommended. Prefer a VPN (Tailscale, WireGuard…) or put it behind a reverse proxy with HTTPS.
 
+## Discord bot
+
+The companion bot [minecraft-modpack-panel-bot](https://github.com/ChoupiViP/minecraft-modpack-panel-bot) controls the panel from Discord. In **Settings → Discord bot**:
+
+- **Bot key**: copy it into the bot's `BOT_SECRET` variable. It only gives access to the server list, start/stop/restart, the console and the bot's own settings (not files, mods, backups or panel settings). **Regenerate** revokes it immediately.
+- **Cloudflare tunnel**: makes the panel reachable over HTTPS from the Internet without opening a port, so the bot can run on a host such as Render. `cloudflared` is downloaded automatically (Windows and Linux; on macOS, `brew install cloudflared`). The panel must be started with `PANEL_PASSWORD`.
+- The panel sends its current address to the bot every 5 minutes, which also keeps a free Render service awake. The bot's settings (channels, roles, chat) are stored by the panel in `data/bot.json`.
+
+See the bot's README for the full setup.
+
 ## Start on boot
 
 - **Windows**: in **Settings → Start with Windows**, click **Enable**. The panel then starts without a window when you log in, with the same address, port and password as now. Tick **Start automatically when the panel starts** in a server's settings to start that server too.
@@ -140,6 +151,7 @@ src/files.js            file manager (sandboxed to the server folder)
 src/crashes.js          crash report analysis
 src/notify.js           Discord notifications
 src/autostart.js        start with Windows
+src/botlink.js          Discord bot link (bot key, Cloudflare tunnel, bot settings)
 src/java.js             Java detection and download (Adoptium)
 src/curseforge.js       CurseForge API client
 src/i18n.js             backend messages (FR / EN)

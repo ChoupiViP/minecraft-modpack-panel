@@ -21,6 +21,7 @@ import * as files from './files.js';
 import { listCrashes, latestCrash } from './crashes.js';
 import { autostartStatus, enableAutostart, disableAutostart } from './autostart.js';
 import { startNotifications, sendTest, WEBHOOK_RE, EVENT_TYPES, DEFAULT_EVENTS } from './notify.js';
+import * as botlink from './botlink.js';
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT) || 8080;
@@ -38,6 +39,11 @@ function checkAuth(req) {
   return pass === PASSWORD;
 }
 app.use((req, res, next) => {
+  // Clé du bot Discord : accès limité aux routes dont le bot a besoin
+  if (botlink.isBotToken(req.headers.authorization)) {
+    if (botlink.botRouteAllowed(req.method, req.path)) return next();
+    return res.status(403).json({ error: t('bot_forbidden'), code: 'bot_forbidden' });
+  }
   if (checkAuth(req)) return next();
   res.set('WWW-Authenticate', 'Basic realm="Minecraft Modpack Panel"').status(401).send(t('auth_required'));
 });
@@ -98,6 +104,27 @@ app.post('/api/notify/test', wrap(async (req, res) => {
 app.post('/api/autostart', wrap(async (req, res) => {
   res.json(req.body?.enabled ? await enableAutostart() : await disableAutostart());
 }));
+
+// ---------- Bot Discord ----------
+app.get('/api/bot', (req, res) => {
+  botlink.ensureSecret();
+  res.json(botlink.botLinkStatus());
+});
+app.put('/api/bot', wrap(async (req, res) => {
+  const { url, tunnel, publicUrl } = req.body || {};
+  await botlink.updateLink({ url, tunnel, publicUrl }, PORT);
+  res.json(botlink.botLinkStatus());
+}));
+app.post('/api/bot/secret', (req, res) => {
+  botlink.regenerateSecret();
+  res.json(botlink.botLinkStatus());
+});
+app.post('/api/bot/ping', wrap(async (req, res) => {
+  await botlink.pingBot();
+  res.json(botlink.botLinkStatus());
+}));
+app.get('/api/bot-config', (req, res) => res.json(botlink.getBotConfig()));
+app.put('/api/bot-config', wrap(async (req, res) => res.json(botlink.updateBotConfig(req.body))));
 
 app.get('/api/java', wrap(async (req, res) => {
   res.json({ installs: await findJavaInstalls({ fresh: req.query.fresh === '1' }), downloading: javaJobs() });
@@ -357,11 +384,19 @@ const httpServer = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 httpServer.on('upgrade', (req, socket, head) => {
-  if (req.url !== '/ws' || !checkAuth(req)) {
+  if (req.url !== '/ws' || !(checkAuth(req) || botlink.isBotToken(req.headers.authorization))) {
     socket.destroy();
     return;
   }
-  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  const isBot = botlink.isBotToken(req.headers.authorization);
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    ws.isBot = isBot;
+    wss.emit('connection', ws, req);
+  });
+});
+// Nouvelle clé du bot : l'ancienne connexion du bot est coupée
+botlink.onSecretChange(() => {
+  for (const c of wss.clients) if (c.isBot) c.terminate();
 });
 
 function broadcast(msg) {
@@ -398,6 +433,7 @@ store
   );
 startStats();
 startScheduler();
+botlink.startBotLink(PORT);
 
 httpServer.listen(PORT, HOST, () => {
   console.log(t('panel_ready', { url: `http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}` }));
@@ -409,6 +445,7 @@ async function shutdown() {
   if (shuttingDown) return process.exit(1);
   shuttingDown = true;
   console.log(t('shutting_down'));
+  botlink.stopBotLink();
   await pm.stopAll();
   stopStats();
   process.exit(0);

@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Discord bot link** (Settings → Discord bot) for [minecraft-modpack-panel-bot](https://github.com/ChoupiViP/minecraft-modpack-panel-bot): limited-access bot key (`Bearer`, only servers, start/stop/restart, console and bot settings; regenerating it disconnects the bot), bot settings stored in `data/bot.json`, signal sent to the bot every 5 minutes with the panel's address.
+- **Cloudflare tunnel** (optional): `cloudflared` is downloaded automatically and makes the panel reachable over HTTPS without opening a port. Requires `PANEL_PASSWORD`.
+
 ## [0.4.0] - 2026-11-13
 
 ### Added
