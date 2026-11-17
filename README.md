@@ -88,6 +88,8 @@ The companion bot [minecraft-modpack-panel-bot](https://github.com/ChoupiViP/min
 
 - **Bot key**: copy it into the bot's `BOT_SECRET` variable. It only gives access to the server list, start/stop/restart, the console and the bot's own settings (not files, mods, backups or panel settings). **Regenerate** revokes it immediately.
 - **Cloudflare tunnel**: makes the panel reachable over HTTPS from the Internet without opening a port, so the bot can run on a host such as Render. `cloudflared` is downloaded automatically (Windows and Linux; on macOS, `brew install cloudflared`). The panel must be started with `PANEL_PASSWORD`.
+  - Without a domain, the tunnel gets a temporary `trycloudflare.com` address that changes at each start (the bot is told automatically).
+  - With your own domain (its DNS managed by Cloudflare, free): create a tunnel in **Cloudflare Zero Trust → Networks → Tunnels** with a public hostname such as `panel.example.com` pointing to `http://localhost:8080`, then paste the tunnel token and the address in the panel. The address never changes.
 - The panel sends its current address to the bot every 5 minutes, which also keeps a free Render service awake. The bot's settings (channels, roles, chat) are stored by the panel in `data/bot.json`.
 
 See the bot's README for the full setup.

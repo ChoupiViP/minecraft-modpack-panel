@@ -78,6 +78,8 @@ Le bot [minecraft-modpack-panel-bot](https://github.com/ChoupiViP/minecraft-modp
 
 - **Clé du bot** : copie-la dans la variable `BOT_SECRET` du bot. Elle donne seulement accès à la liste des serveurs, au démarrage, à l'arrêt, au redémarrage, à la console et aux réglages du bot (pas aux fichiers, mods, sauvegardes ni paramètres du panel). **Régénérer** la révoque immédiatement.
 - **Tunnel Cloudflare** : rend le panel joignable en HTTPS depuis Internet sans ouvrir de port, pour héberger le bot ailleurs (Render…). `cloudflared` est téléchargé automatiquement (Windows et Linux ; sur macOS, `brew install cloudflared`). Le panel doit être lancé avec `PANEL_PASSWORD`.
+  - Sans domaine, le tunnel reçoit une adresse temporaire `trycloudflare.com` qui change à chaque démarrage (le bot est prévenu automatiquement).
+  - Avec ton propre domaine (DNS géré par Cloudflare, gratuit) : crée un tunnel dans **Cloudflare Zero Trust → Networks → Tunnels** avec un nom d'hôte public comme `panel.exemple.fr` vers `http://localhost:8080`, puis colle le token du tunnel et l'adresse dans le panel. L'adresse ne change plus jamais.
 - Le panel envoie son adresse actuelle au bot toutes les 5 minutes, ce qui garde aussi éveillé un service Render gratuit. Les réglages du bot (salons, rôles, chat) sont enregistrés par le panel dans `data/bot.json`.
 
 L'installation complète est décrite dans le README du bot.

@@ -111,8 +111,8 @@ app.get('/api/bot', (req, res) => {
   res.json(botlink.botLinkStatus());
 });
 app.put('/api/bot', wrap(async (req, res) => {
-  const { url, tunnel, publicUrl } = req.body || {};
-  await botlink.updateLink({ url, tunnel, publicUrl }, PORT);
+  const { url, tunnel, publicUrl, tunnelToken } = req.body || {};
+  await botlink.updateLink({ url, tunnel, publicUrl, tunnelToken }, PORT);
   res.json(botlink.botLinkStatus());
 }));
 app.post('/api/bot/secret', (req, res) => {

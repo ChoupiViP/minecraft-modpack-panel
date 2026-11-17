@@ -86,3 +86,21 @@ test('adresses : tunnel Cloudflare et validation', async () => {
   await assert.rejects(botlink.updateLink({ tunnel: true }, 8080), (e) => e.code === 'tunnel_needs_password');
   botlink.stopBotLink();
 });
+
+test('tunnel nommé : token validé, masqué, adresse publique obligatoire', async () => {
+  process.env.PANEL_PASSWORD = 'test';
+  const token = 'eyJhIjoi' + 'A'.repeat(120) + 'In0=';
+  await assert.rejects(botlink.updateLink({ tunnelToken: 'abc' }, 8080), (e) => e.code === 'tunnel_token_invalid');
+  // Commande complète copiée depuis Cloudflare : seul le token est gardé
+  await botlink.updateLink({ tunnelToken: `cloudflared.exe service install ${token}`, tunnel: false }, 8080);
+  assert.equal(botlink.linkSettings().tunnelToken, token);
+  assert.equal(botlink.botLinkStatus().tunnelToken, '••••••••In0=');
+  // Valeur masquée renvoyée par l'interface : token inchangé
+  await botlink.updateLink({ tunnelToken: '••••••••In0=' }, 8080);
+  assert.equal(botlink.linkSettings().tunnelToken, token);
+  await assert.rejects(botlink.updateLink({ tunnel: true, publicUrl: '' }, 8080), (e) => e.code === 'tunnel_needs_public_url');
+  await botlink.updateLink({ tunnelToken: '' }, 8080);
+  assert.equal(botlink.linkSettings().tunnelToken, '');
+  botlink.stopBotLink();
+  delete process.env.PANEL_PASSWORD;
+});

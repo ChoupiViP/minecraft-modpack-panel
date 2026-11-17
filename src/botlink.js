@@ -20,7 +20,10 @@ const SNOWFLAKE = /^\d{15,22}$/;
 export const TUNNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 
 // ---------- Réglages du lien (dans settings.json) ----------
-const DEFAULT_LINK = { url: '', secret: '', tunnel: false, publicUrl: '' };
+// tunnelToken : tunnel nommé Cloudflare (adresse fixe sur ton domaine) ; vide = tunnel temporaire trycloudflare
+const DEFAULT_LINK = { url: '', secret: '', tunnel: false, publicUrl: '', tunnelToken: '' };
+const TUNNEL_TOKEN_RE = /^[A-Za-z0-9+/=_-]{50,}$/;
+export const maskToken = (token) => (token ? '••••••••' + token.slice(-4) : '');
 
 export function linkSettings() {
   return { ...DEFAULT_LINK, ...getSettings().bot };
@@ -61,17 +64,31 @@ function cleanUrl(value, field) {
 }
 
 /** Met à jour l'adresse du bot, le tunnel et l'adresse publique manuelle. */
-export async function updateLink({ url, tunnel, publicUrl }, port) {
+export async function updateLink({ url, tunnel, publicUrl, tunnelToken }, port) {
+  const before = linkSettings();
   const patch = {};
   if (url !== undefined) patch.url = cleanUrl(url, 'url');
   if (publicUrl !== undefined) patch.publicUrl = cleanUrl(publicUrl, 'publicUrl');
+  // Valeur masquée renvoyée par l'interface = inchangée
+  if (typeof tunnelToken === 'string' && !tunnelToken.startsWith('••')) {
+    // Accepte aussi la commande complète copiée depuis Cloudflare ("cloudflared ... run --token eyJ...")
+    const token = tunnelToken.trim().split(/\s+/).pop() || '';
+    if (token && !TUNNEL_TOKEN_RE.test(token)) throw err('tunnel_token_invalid', {}, 400);
+    patch.tunnelToken = token;
+  }
   if (tunnel !== undefined) {
     if (tunnel && !process.env.PANEL_PASSWORD) throw err('tunnel_needs_password', {}, 400);
     patch.tunnel = Boolean(tunnel);
   }
+  const next = { ...before, ...patch };
+  if (next.tunnel && next.tunnelToken && !next.publicUrl) throw err('tunnel_needs_public_url', {}, 400);
   saveLink(patch);
-  if (patch.tunnel === true) startTunnel(port).catch(() => {});
-  if (patch.tunnel === false) stopTunnel();
+  const restart = next.tunnel && before.tunnel && next.tunnelToken !== before.tunnelToken;
+  if (!next.tunnel) stopTunnel();
+  else if (!before.tunnel || restart) {
+    if (restart) stopTunnel();
+    startTunnel(port).catch(() => {});
+  }
   pingSoon();
 }
 
@@ -218,10 +235,32 @@ export async function startTunnel(port) {
   }
   if (!tunnel.wanted || tunnel.proc) return;
   tunnel.status = 'starting';
-  const host = !process.env.HOST || process.env.HOST === '0.0.0.0' ? '127.0.0.1' : process.env.HOST;
-  const proc = spawn(exe, ['tunnel', '--no-autoupdate', '--url', `http://${host}:${port}`], { windowsHide: true });
+  const { tunnelToken, publicUrl } = linkSettings();
+  let proc;
+  if (tunnelToken) {
+    // Tunnel nommé : l'adresse (ex. https://panel.mondomaine.fr) et le service (http://localhost:8080)
+    // sont réglés dans le tableau de bord Cloudflare. Le token passe par l'environnement, pas la ligne de commande.
+    proc = spawn(exe, ['tunnel', '--no-autoupdate', 'run'], { windowsHide: true, env: { ...process.env, TUNNEL_TOKEN: tunnelToken } });
+  } else {
+    const host = !process.env.HOST || process.env.HOST === '0.0.0.0' ? '127.0.0.1' : process.env.HOST;
+    proc = spawn(exe, ['tunnel', '--no-autoupdate', '--url', `http://${host}:${port}`], { windowsHide: true });
+  }
   tunnel.proc = proc;
+  tunnel.named = Boolean(tunnelToken);
   const onLine = (line) => {
+    if (tunnel.proc !== proc) return;
+    if (tunnelToken) {
+      if (/Registered tunnel connection/i.test(line) && tunnel.status !== 'on') {
+        tunnel.url = publicUrl;
+        tunnel.status = 'on';
+        tunnel.error = '';
+        console.log(`[Tunnel] ${publicUrl}`);
+        pingSoon();
+      } else if (/\bERR\b/.test(line)) {
+        tunnel.error = line.replace(/^.*?\bERR\b\s*/, '').slice(0, 200);
+      }
+      return;
+    }
     const m = line.match(TUNNEL_URL_RE);
     if (m && m[0] !== tunnel.url) {
       tunnel.url = m[0];
@@ -233,10 +272,12 @@ export async function startTunnel(port) {
   proc.stdout.on('data', lineSplitter(onLine));
   proc.stderr.on('data', lineSplitter(onLine));
   proc.on('error', (e) => {
+    if (tunnel.proc !== proc) return;
     tunnel.status = 'error';
     tunnel.error = e.message;
   });
   proc.on('exit', (code) => {
+    if (tunnel.proc !== proc) return; // ancien processus remplacé
     tunnel.proc = null;
     tunnel.url = '';
     if (!tunnel.wanted) {
@@ -253,6 +294,7 @@ export function stopTunnel() {
   tunnel.wanted = false;
   clearTimeout(tunnel.restartTimer);
   tunnel.proc?.kill();
+  tunnel.proc = null; // permet un redémarrage immédiat (le 'exit' de l'ancien processus est ignoré)
   tunnel.status = 'off';
   tunnel.url = '';
   tunnel.error = '';
@@ -332,6 +374,7 @@ export function botLinkStatus() {
     secret: s.secret,
     tunnel: s.tunnel,
     publicUrl: s.publicUrl,
+    tunnelToken: maskToken(s.tunnelToken),
     hasPassword: Boolean(process.env.PANEL_PASSWORD),
     tunnelState: { status: tunnel.status, url: tunnel.url, error: tunnel.error },
     panelUrl: panelPublicUrl(),

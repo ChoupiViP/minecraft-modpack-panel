@@ -247,6 +247,10 @@ async function renderBotCard(data) {
         <input name="publicUrl" value="${esc(b.publicUrl)}" placeholder="https://panel.mondomaine.fr" autocomplete="off">
         <span class="small muted">${t('bot.publicUrlHelp')}</span>
       </label>
+      <label class="field"><span>${t('bot.tunnelToken')}</span>
+        <input name="tunnelToken" value="${esc(b.tunnelToken)}" placeholder="eyJhIjoi…" autocomplete="off">
+        <span class="small muted">${t('bot.tunnelTokenHelp')}</span>
+      </label>
       <p class="small" style="margin:0">🌐 ${tunnelLine}<br>🤖 ${linkLine}${warn}</p>
       <div class="row">
         <button class="btn primary">${t('common.save')}</button>
@@ -258,7 +262,7 @@ async function renderBotCard(data) {
   $('#bot-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;
-    const body = { url: f.url.value, publicUrl: f.publicUrl.value };
+    const body = { url: f.url.value, publicUrl: f.publicUrl.value, tunnelToken: f.tunnelToken.value };
     if (b.hasPassword) body.tunnel = f.tunnel.checked;
     let res;
     const ok = await act(async () => (res = await api('/bot', { method: 'PUT', body })), t('settings.saved'));

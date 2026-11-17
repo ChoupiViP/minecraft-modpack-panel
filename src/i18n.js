@@ -122,6 +122,8 @@ export const messages = {
     bot_secret_mismatch: 'Le bot refuse la clé : copie la clé du panel dans la variable BOT_SECRET du bot, puis redéploie-le.',
     bot_no_public_url: "Le bot est joignable, mais le panel n'a pas d'adresse publique : active le tunnel ou indique une adresse publique.",
     tunnel_needs_password: 'Le tunnel rend le panel accessible depuis Internet : lance d’abord le panel avec un mot de passe (PANEL_PASSWORD).',
+    tunnel_token_invalid: 'Token de tunnel Cloudflare invalide : copie le token (ou la commande complète) affiché par Cloudflare.',
+    tunnel_needs_public_url: 'Avec un tunnel nommé, indique aussi son adresse publique (ex. https://panel.mondomaine.fr).',
     cloudflared_unsupported: 'Téléchargement automatique de cloudflared indisponible sur ce système : installe-le (ex. brew install cloudflared).',
     cloudflared_download_failed: 'Téléchargement de cloudflared impossible (HTTP {status}).',
     // Discord
@@ -243,6 +245,8 @@ export const messages = {
     bot_secret_mismatch: "The bot rejects the key: copy the panel's key into the bot's BOT_SECRET variable, then redeploy it.",
     bot_no_public_url: 'The bot is reachable, but the panel has no public address: enable the tunnel or enter a public address.',
     tunnel_needs_password: 'The tunnel makes the panel reachable from the Internet: start the panel with a password (PANEL_PASSWORD) first.',
+    tunnel_token_invalid: 'Invalid Cloudflare tunnel token: copy the token (or the full command) shown by Cloudflare.',
+    tunnel_needs_public_url: 'With a named tunnel, also enter its public address (e.g. https://panel.mydomain.com).',
     cloudflared_unsupported: 'Automatic cloudflared download is not available on this system: install it (e.g. brew install cloudflared).',
     cloudflared_download_failed: 'Could not download cloudflared (HTTP {status}).',
     webhook_invalid: 'Invalid Discord webhook URL.',
